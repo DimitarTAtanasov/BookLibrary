@@ -11,7 +11,7 @@ import Loader from './components/Loader';
 import ConnectButton from './components/ConnectButton';
 
 import { Web3Provider } from '@ethersproject/providers';
-import { getChainData } from './helpers/utilities';
+import { getChainData, showNotification } from './helpers/utilities';
 import {
   BOOK_LIBRARY_ADDRESS
 } from './constants';
@@ -198,19 +198,44 @@ class App extends React.Component<any, any> {
     provider.on("accountsChanged", this.changedAccount);
     provider.on("networkChanged", this.networkChanged);
     provider.on("close", this.close);
-    this.state.bookLibraryContract.on("NewBookAdded", this.getAvailableBooks);
-    this.state.bookLibraryContract.on("BookBorrowed", this.getAvailableBooks);
-    this.state.bookLibraryContract.on("BookBorrowed", this.getBorrowedBooks);
-    this.state.bookLibraryContract.on("BookBorrowed", this.getUserBalance);
-    this.state.bookLibraryContract.on("BookBorrowed", this.getContractBalance);
-    this.state.bookLibraryContract.on("BookReturned", this.getAvailableBooks);
-    this.state.bookLibraryContract.on("BookReturned", this.getBorrowedBooks);
+    // this.state.bookLibraryContract.on("NewBookAdded", this.getAvailableBooks);
+    this.state.bookLibraryContract.on("NewBookAdded", this.handeBookAdded);
+    this.state.bookLibraryContract.on("BookReturned", this.handeBookReturned);
+    this.state.bookLibraryContract.on("BookBorrowed", this.handeBookBorrowed);
+    
+    const filterTransfer = this.state.tokenContract.filters.Transfer(
+      null, BOOK_LIBRARY_ADDRESS, null
+    );
 
+    this.state.tokenContract.on(filterTransfer, async (from: any, to: any, amount: any, event: any) => {
+      const getEventBlock = await event.getBlock();
+      showNotification(getEventBlock.hash);
+    })
+
+    // the following events are for debuging purpose
     this.state.bookLibraryContract.on("UnwrapInBookContract", (amount: any) => {logMsg(ethers.utils.formatEther(amount))});
     this.state.wrapperContract.on("UnwrapInWrapperContract", (amount: any) => {logMsg(ethers.utils.formatEther(amount))});
 
     await this.web3Modal.off('accountsChanged');
   };
+
+  public handeBookAdded = async () => {
+    await this.getAvailableBooks();
+    showNotification('Book added')
+  }
+
+  public handeBookBorrowed = async () => {
+    await this.getAvailableBooks();
+    await this.getBorrowedBooks();
+    await this.getUserBalance();
+    await this.getContractBalance();
+    showNotification('Book borrowed')
+  }
+
+  public handeBookReturned = async () => {
+    await this.getAvailableBooks();
+    showNotification('Book returned')
+  }
 
   public async unSubscribe(provider: any) {
     window.location.reload(false);
@@ -221,6 +246,12 @@ class App extends React.Component<any, any> {
     provider.off("accountsChanged", this.changedAccount);
     provider.off("networkChanged", this.networkChanged);
     provider.off("close", this.close);
+
+    this.state.bookLibraryContract.off("NewBookAdded", this.handeBookAdded);
+    this.state.bookLibraryContract.off("BookReturned", this.handeBookReturned);
+    this.state.bookLibraryContract.off("BookBorrowed", this.handeBookBorrowed);
+
+    
   }
 
   public changedAccount = async (accounts: string[]) => {
