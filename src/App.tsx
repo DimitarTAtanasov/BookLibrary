@@ -89,6 +89,10 @@ interface IAppState {
   contractBalance: any | null;
   contractETHBalance: any | null;
   rentPrice: any | null;
+  iface: any | null;
+  signer: any | null;
+  hashedMessage: any | null;
+  signedMessage: any | null;
 }
 
 const INITIAL_STATE: IAppState = {
@@ -119,7 +123,11 @@ const INITIAL_STATE: IAppState = {
   userBalance: null,
   contractBalance: null,
   contractETHBalance: null,
-  rentPrice: null
+  rentPrice: null,
+  iface: null,
+  signer: null,
+  hashedMessage: null,
+  signedMessage: null
 };
 
 class App extends React.Component<any, any> {
@@ -152,20 +160,39 @@ class App extends React.Component<any, any> {
 
     const library = new Web3Provider(this.provider);
 
+    const signer = library.getSigner();
+
     const network = await library.getNetwork();
 
     const address = this.provider.selectedAddress ? this.provider.selectedAddress : this.provider?.accounts[0];
-    const bookLibraryContract = getContract(BOOK_LIBRARY_ADDRESS, BOOK_LIBRARY.abi, library, address);
 
-    const tokenAddress = await bookLibraryContract.LIBToken();
-    const tokenContract = getContract(tokenAddress, LIB_TOKEN.abi, library, address);
-    logMsg(tokenAddress)
+    const isbookingLibraryAddrValid = ethers.utils.isAddress(BOOK_LIBRARY_ADDRESS);
+    let bookLibraryContract;
+    let tokenContract;
+    let wrapperContract;
+    let tokenAddress;
+    let wrapperAddress;
+    let iface;
 
-    const wrapperAddress = await bookLibraryContract.wrapperContract();
+    if(isbookingLibraryAddrValid) {
+      iface = new ethers.utils.Interface(BOOK_LIBRARY.abi);
+      bookLibraryContract = getContract(BOOK_LIBRARY_ADDRESS, BOOK_LIBRARY.abi, library, address);
+      tokenAddress = await bookLibraryContract.LIBToken();
 
-    logMsg(wrapperAddress)
+      if(ethers.utils.isAddress(tokenAddress)) {
+        tokenContract = getContract(tokenAddress, LIB_TOKEN.abi, library, address);
 
-    const wrapperContract = getContract(wrapperAddress, WRAPPER_CONTRACT.abi, library, address);
+      }
+
+      wrapperAddress = await bookLibraryContract.wrapperContract();
+
+      if(ethers.utils.isAddress(wrapperAddress)) {
+        wrapperContract = getContract(wrapperAddress, WRAPPER_CONTRACT.abi, library, address);
+
+      }
+    }
+
+
 
     await this.setState({
       library,
@@ -176,7 +203,9 @@ class App extends React.Component<any, any> {
       tokenAddress,
       tokenContract,
       wrapperAddress,
-      wrapperContract
+      wrapperContract,
+      iface,
+      signer
       // userBalance: balanceTry
     });
 
@@ -394,7 +423,7 @@ class App extends React.Component<any, any> {
   }
 
   public borrowBook = async (bookId: string) => {
-    const { bookLibraryContract, tokenContract, rentPrice } = this.state;
+    const { tokenContract, rentPrice, iface, signer } = this.state;
 
     this.setState({ fetchingBorrowBook: true });
 
@@ -403,14 +432,23 @@ class App extends React.Component<any, any> {
       const approveTx = await tokenContract.approve(BOOK_LIBRARY_ADDRESS, rentPrice);
       await approveTx.wait();
 
-      const transaction = await bookLibraryContract.borrowBookById(bookId);
+      // manually send transaction 
+      const encodedData = iface.encodeFunctionData("borrowBookById", [bookId]);
 
-      this.setState({ transactionHash: transaction.hash });
+      const transaction = {
+        to: BOOK_LIBRARY_ADDRESS,
+        data: encodedData
+      };
 
-      const transactionReceipt = await transaction.wait();
-      if (transactionReceipt.status !== 1) {
-        // React to failure
-      }
+      await signer.sendTransaction(transaction);
+      // const transaction = await bookLibraryContract.borrowBookById(bookId);
+
+      // this.setState({ transactionHash: transaction.hash });
+
+      // const transactionReceipt = await transaction.wait();
+      // if (transactionReceipt.status !== 1) {
+      //   // React to failure
+      // }
     }
     catch (e) {
       logMsg(e)
@@ -541,6 +579,99 @@ class App extends React.Component<any, any> {
     this.setState({rentPrice})
   }
 
+  public signWrapMessage = async (messageToSign: any) => {
+    const { signer } = this.state;
+
+    const hashedMessage = ethers.utils.solidityKeccak256(['string'], [messageToSign]);
+
+    const arrayfiedHash = ethers.utils.arrayify(hashedMessage);
+
+    const signedMessage = await signer.signMessage(arrayfiedHash);
+
+    // this.setState({hashedMessage, signedMessage})
+    logMsg(hashedMessage)
+    logMsg(signedMessage)
+  }
+
+  public signForborrowingBook = async () => {
+    const { signer, rentPrice, tokenContract } = this.state;
+    const messageToSign = 'Allow borrow this book from another acc'
+
+    const hashedMessage = ethers.utils.solidityKeccak256(['string'], [messageToSign]);
+
+    const arrayfiedHash = ethers.utils.arrayify(hashedMessage);
+
+    const signedMessage = await signer.signMessage(arrayfiedHash);
+
+    const approveTx = await tokenContract.approve(BOOK_LIBRARY_ADDRESS, rentPrice);
+    await approveTx.wait();
+
+    // this.setState({hashedMessage, signedMessage})
+    logMsg(hashedMessage)
+    logMsg(signedMessage)
+
+  }
+
+  public borrowSignedBook = async () => {
+    const { bookLibraryContract } = this.state;
+    // TODO implement input fields where these values could be fulfilled
+    const signedMessage = '0xdf12d86b2bb09c2fa316f5dae7e98dc9c67b945337cf8d49065127081ca28b223e338b0936860e5ec5c1cfbc1caed5f9814687e1d5c85865a5169729541428bc1c'
+    const hashedMessage = '0xf25626ca4e6854665dd796172b32bc4cf05721a036483fdb896d0fd11189d99b'
+    const bookId = '0x62cf78552a7f5f4b13c34a5b623c8343e7818e3a9463b1015f1071a5a94b8afb'
+    const receiver = "0xD9995BAE12FEe327256FFec1e3184d492bD94C31";
+
+    const sig = ethers.utils.splitSignature(signedMessage);
+
+    try {
+      const wrapTx = await bookLibraryContract.borrowWithSignature(hashedMessage, sig.v, sig.r, sig.s, receiver,  bookId)
+
+      const transactionReceipt = await wrapTx.wait();
+      if (transactionReceipt.status !== 1) {
+        // React to failure
+      }
+    }
+    catch (e) {
+      logMsg(e)
+      if (e.error) {
+        this.setErrorMessage(e.error.message)
+      }
+      else if(e.data) {
+        this.setErrorMessage(e.data.message)
+      }
+    }
+  }
+
+  public wrapWithSignedMessage = async () => {
+    const { wrapperContract } = this.state;
+    // TODO implement input fields where these values could be fulfilled
+
+    const signedMessage = '0x1100b2ba29fe21ceeda4351f7dad1d2481c1abca7d207dd2ce01b9015e58e3ef6bb065cc984d61883f6f28aeb4450459262d85e8239e34f9241d91c15129cbaa1c'
+    const hashedMessage = '0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470'
+
+    const wrapValue = ethers.utils.parseEther("0.1");
+    const receiver = "0xD9995BAE12FEe327256FFec1e3184d492bD94C31";
+
+    const sig = ethers.utils.splitSignature(signedMessage);
+
+    try {
+      const wrapTx = await wrapperContract.wrapWithSignature(hashedMessage, sig.v, sig.r, sig.s, receiver,  {value: wrapValue})
+
+      const transactionReceipt = await wrapTx.wait();
+      if (transactionReceipt.status !== 1) {
+        // React to failure
+      }
+    }
+    catch (e) {
+      logMsg(e)
+      if (e.error) {
+        this.setErrorMessage(e.error.message)
+      }
+      else if(e.data) {
+        this.setErrorMessage(e.data.message)
+      }
+    }
+  }
+
   public render = () => {
     const {
       address,
@@ -626,6 +757,21 @@ class App extends React.Component<any, any> {
                     </div>
                     <div>
                       <span>{`Contract ETH balance is: ${this.state.contractETHBalance}`}</span>
+                    </div>
+
+                    <div>
+                      <button onClick={this.signWrapMessage}>Sign a message</button>
+                    </div>
+
+                    <div>
+                      <button onClick={this.wrapWithSignedMessage}>Wrap tokens with signing</button>
+                    </div>
+
+                    <div>
+                      <button onClick={this.signForborrowingBook}>Sign for borrowing</button>
+                    </div>
+                    <div>
+                      <button onClick={this.borrowSignedBook}>Borrow signed book</button>
                     </div>
                   </div>
                 }
