@@ -174,19 +174,19 @@ class App extends React.Component<any, any> {
     let wrapperAddress;
     let iface;
 
-    if(isbookingLibraryAddrValid) {
+    if (isbookingLibraryAddrValid) {
       iface = new ethers.utils.Interface(BOOK_LIBRARY.abi);
       bookLibraryContract = getContract(BOOK_LIBRARY_ADDRESS, BOOK_LIBRARY.abi, library, address);
       tokenAddress = await bookLibraryContract.LIBToken();
 
-      if(ethers.utils.isAddress(tokenAddress)) {
+      if (ethers.utils.isAddress(tokenAddress)) {
         tokenContract = getContract(tokenAddress, LIB_TOKEN.abi, library, address);
 
       }
 
       wrapperAddress = await bookLibraryContract.wrapperContract();
 
-      if(ethers.utils.isAddress(wrapperAddress)) {
+      if (ethers.utils.isAddress(wrapperAddress)) {
         wrapperContract = getContract(wrapperAddress, WRAPPER_CONTRACT.abi, library, address);
 
       }
@@ -206,13 +206,12 @@ class App extends React.Component<any, any> {
       wrapperContract,
       iface,
       signer
-      // userBalance: balanceTry
     });
 
     await this.getAvailableBooks();
     await this.getBorrowedBooks();
     await this.getUserBalance();
-    await this.getContractBalance();
+    await this.getContractsBalances();
 
     await this.getRentPrice();
     await this.subscribeToProviderEvents(this.provider);
@@ -227,11 +226,11 @@ class App extends React.Component<any, any> {
     provider.on("accountsChanged", this.changedAccount);
     provider.on("networkChanged", this.networkChanged);
     provider.on("close", this.close);
-    // this.state.bookLibraryContract.on("NewBookAdded", this.getAvailableBooks);
-    this.state.bookLibraryContract.on("NewBookAdded", this.handeBookAdded);
-    this.state.bookLibraryContract.on("BookReturned", this.handeBookReturned);
-    this.state.bookLibraryContract.on("BookBorrowed", this.handeBookBorrowed);
-    
+
+    this.state.bookLibraryContract.on("NewBookAdded", this.handleBookAdded);
+    this.state.bookLibraryContract.on("BookReturned", this.handleBookReturned);
+    this.state.bookLibraryContract.on("BookBorrowed", this.handleBookBorrowed);
+
     const filterTransfer = this.state.tokenContract.filters.Transfer(
       null, BOOK_LIBRARY_ADDRESS, null
     );
@@ -248,26 +247,26 @@ class App extends React.Component<any, any> {
     })
 
     // the following events are for debuging purpose
-    this.state.bookLibraryContract.on("UnwrapInBookContract", (amount: any) => {logMsg(ethers.utils.formatEther(amount))});
-    this.state.wrapperContract.on("UnwrapInWrapperContract", (amount: any) => {logMsg(ethers.utils.formatEther(amount))});
+    this.state.bookLibraryContract.on("UnwrapInBookContract", (amount: any) => { logMsg(ethers.utils.formatEther(amount)) });
+    this.state.wrapperContract.on("UnwrapInWrapperContract", (amount: any) => { logMsg(ethers.utils.formatEther(amount)) });
 
     await this.web3Modal.off('accountsChanged');
   };
 
-  public handeBookAdded = async () => {
+  public handleBookAdded = async () => {
     await this.getAvailableBooks();
     showNotification('Book added')
   }
 
-  public handeBookBorrowed = async () => {
+  public handleBookBorrowed = async () => {
     await this.getAvailableBooks();
     await this.getBorrowedBooks();
     await this.getUserBalance();
-    await this.getContractBalance();
+    await this.getContractsBalances();
     showNotification('Book borrowed')
   }
 
-  public handeBookReturned = async () => {
+  public handleBookReturned = async () => {
     await this.getAvailableBooks();
     showNotification('Book returned')
   }
@@ -282,11 +281,9 @@ class App extends React.Component<any, any> {
     provider.off("networkChanged", this.networkChanged);
     provider.off("close", this.close);
 
-    this.state.bookLibraryContract.off("NewBookAdded", this.handeBookAdded);
-    this.state.bookLibraryContract.off("BookReturned", this.handeBookReturned);
-    this.state.bookLibraryContract.off("BookBorrowed", this.handeBookBorrowed);
-
-    
+    this.state.bookLibraryContract.off("NewBookAdded", this.handleBookAdded);
+    this.state.bookLibraryContract.off("BookReturned", this.handleBookReturned);
+    this.state.bookLibraryContract.off("BookBorrowed", this.handleBookBorrowed);
   }
 
   public changedAccount = async (accounts: string[]) => {
@@ -353,7 +350,7 @@ class App extends React.Component<any, any> {
       if (e.error) {
         this.setErrorMessage(e.error.message)
       }
-      else if(e.data) {
+      else if (e.data) {
         this.setErrorMessage(e.data.message)
       }
     }
@@ -436,7 +433,7 @@ class App extends React.Component<any, any> {
     try {
 
       const signature = await this.onAttemptToApprove();
-      
+
       const transaction = await bookLibraryContract.borrowBookById(bookId, rentPrice, signature.deadline, signature.v, signature.r, signature.s);
 
       this.setState({ transactionHash: transaction.hash });
@@ -451,7 +448,7 @@ class App extends React.Component<any, any> {
       if (e.error) {
         this.setErrorMessage(e.error.message)
       }
-      else if(e.data) {
+      else if (e.data) {
         this.setErrorMessage(e.data.message)
       }
     }
@@ -481,7 +478,7 @@ class App extends React.Component<any, any> {
       if (e.error) {
         this.setErrorMessage(e.error.message)
       }
-      else if(e.data) {
+      else if (e.data) {
         this.setErrorMessage(e.data.message)
       }
     }
@@ -501,7 +498,7 @@ class App extends React.Component<any, any> {
     this.setState({ userBalance });
   }
 
-  public getContractBalance = async () => {
+  public getContractsBalances = async () => {
 
     const { tokenContract, library, wrapperAddress } = this.state;
 
@@ -521,11 +518,11 @@ class App extends React.Component<any, any> {
 
     const wrapValue = ethers.utils.parseEther("0.1");
 
-    const wrapTx = await wrapperContract.wrap({value: wrapValue})
+    const wrapTx = await wrapperContract.wrap({ value: wrapValue })
     await wrapTx.wait();
 
     await this.getUserBalance()
-    await this.getContractBalance()
+    await this.getContractsBalances()
   }
 
   public unWrapTokenIntoContract = async () => {
@@ -551,7 +548,7 @@ class App extends React.Component<any, any> {
       if (e.error) {
         this.setErrorMessage(e.error.message)
       }
-      else if(e.data) {
+      else if (e.data) {
         this.setErrorMessage(e.data.message)
       }
     }
@@ -561,8 +558,8 @@ class App extends React.Component<any, any> {
     }
 
     await this.getUserBalance();
-    await this.getContractBalance();
-    
+    await this.getContractsBalances();
+
   }
 
 
@@ -572,7 +569,7 @@ class App extends React.Component<any, any> {
 
     const rentPrice = await bookLibraryContract.rentPrice();
 
-    this.setState({rentPrice})
+    this.setState({ rentPrice })
   }
 
   public signWrapMessage = async (messageToSign: any) => {
@@ -620,7 +617,7 @@ class App extends React.Component<any, any> {
     const sig = ethers.utils.splitSignature(signedMessage);
 
     try {
-      const wrapTx = await bookLibraryContract.borrowWithSignature(hashedMessage, sig.v, sig.r, sig.s, receiver,  bookId)
+      const wrapTx = await bookLibraryContract.borrowWithSignature(hashedMessage, sig.v, sig.r, sig.s, receiver, bookId)
 
       const transactionReceipt = await wrapTx.wait();
       if (transactionReceipt.status !== 1) {
@@ -632,7 +629,7 @@ class App extends React.Component<any, any> {
       if (e.error) {
         this.setErrorMessage(e.error.message)
       }
-      else if(e.data) {
+      else if (e.data) {
         this.setErrorMessage(e.data.message)
       }
     }
@@ -651,7 +648,7 @@ class App extends React.Component<any, any> {
     const sig = ethers.utils.splitSignature(signedMessage);
 
     try {
-      const wrapTx = await wrapperContract.wrapWithSignature(hashedMessage, sig.v, sig.r, sig.s, receiver,  {value: wrapValue})
+      const wrapTx = await wrapperContract.wrapWithSignature(hashedMessage, sig.v, sig.r, sig.s, receiver, { value: wrapValue })
 
       const transactionReceipt = await wrapTx.wait();
       if (transactionReceipt.status !== 1) {
@@ -663,69 +660,69 @@ class App extends React.Component<any, any> {
       if (e.error) {
         this.setErrorMessage(e.error.message)
       }
-      else if(e.data) {
+      else if (e.data) {
         this.setErrorMessage(e.data.message)
       }
     }
   }
 
   public onAttemptToApprove = async () => {
-		const { tokenContract, address, library, rentPrice } = this.state;
-		
-		const nonce = (await tokenContract.nonces(address)); // Our Token Contract Nonces
+    const { tokenContract, address, library, rentPrice } = this.state;
+
+    const nonce = (await tokenContract.nonces(address)); // Our Token Contract Nonces
     const deadline = + new Date() + 60 * 60; // Permit with deadline which the permit is valid
     const wrapValue = rentPrice; // Value to approve for the spender to use
-		
-		const EIP712Domain = [ // array of objects -> properties from the contract and the types of them ircwithPermit
-        { name: 'name', type: 'string' },
-        { name: 'version', type: 'string' },
-        { name: 'verifyingContract', type: 'address' }
+
+    const EIP712Domain = [ // array of objects -> properties from the contract and the types of them ircwithPermit
+      { name: 'name', type: 'string' },
+      { name: 'version', type: 'string' },
+      { name: 'verifyingContract', type: 'address' }
     ];
 
     const domain = {
-        name: await tokenContract.name(),
-        version: '1',
-        verifyingContract: tokenContract.address
+      name: await tokenContract.name(),
+      version: '1',
+      verifyingContract: tokenContract.address
     };
 
     const Permit = [ // array of objects -> properties from erc20withpermit
-        { name: 'owner', type: 'address' },
-        { name: 'spender', type: 'address' },
-        { name: 'value', type: 'uint256' },
-        { name: 'nonce', type: 'uint256' },
-        { name: 'deadline', type: 'uint256' }
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' }
     ];
 
     const message = {
-        owner: address,
-        spender: BOOK_LIBRARY_ADDRESS,
-        value: wrapValue.toString(),
-        nonce: nonce.toHexString(),
-        deadline
+      owner: address,
+      spender: BOOK_LIBRARY_ADDRESS,
+      value: wrapValue.toString(),
+      nonce: nonce.toHexString(),
+      deadline
     };
 
     const data = JSON.stringify({
-        types: {
-            EIP712Domain,
-            Permit
-        },
-        domain,
-        primaryType: 'Permit',
-        message
+      types: {
+        EIP712Domain,
+        Permit
+      },
+      domain,
+      primaryType: 'Permit',
+      message
     })
 
     const signatureLike = await library.send('eth_signTypedData_v4', [address, data]);
     const signature = await ethers.utils.splitSignature(signatureLike)
 
     const preparedSignature = {
-        v: signature.v,
-        r: signature.r,
-        s: signature.s,
-        deadline
+      v: signature.v,
+      r: signature.r,
+      s: signature.s,
+      deadline
     }
 
     return preparedSignature
-}
+  }
 
   public render = () => {
     const {
@@ -792,26 +789,26 @@ class App extends React.Component<any, any> {
                     />
                     <div>
                       {this.state.fetchingunWrapTokens ? (
-                          <Column center>
-                        <SContainer>
-                          <Loader />
-                        </SContainer>
-              </Column>
+                        <Column center>
+                          <SContainer>
+                            <Loader />
+                          </SContainer>
+                        </Column>
                       ) : (
                         <div>
-                        <span>{`Your current LIBToken balance is: ${this.state.userBalance}`}</span>
-                      <button onClick={this.buyLibTokens}>Buy LIBToken</button>
+                          <span>{`User current LIBToken balance is: ${this.state.userBalance}`}</span>
+                          <button onClick={this.buyLibTokens}>Buy LIBToken</button>
                         </div>
 
                       )}
 
                     </div>
                     <div>
-                      <span>{`Contract LIBToken balance is: ${this.state.contractBalance}`}</span>
+                      <span>{`Book library Contract LIBToken balance is: ${this.state.contractBalance}`}</span>
                       <button onClick={this.unWrapTokenIntoContract}>take back your ETH</button>
                     </div>
                     <div>
-                      <span>{`Contract ETH balance is: ${this.state.contractETHBalance}`}</span>
+                      <span>{`Wrapper Contract ETH balance is: ${this.state.contractETHBalance}`}</span>
                     </div>
 
                     <div>
@@ -830,7 +827,7 @@ class App extends React.Component<any, any> {
                     </div>
                   </div>
                 }
-                <hr/>
+                <hr />
                 <ErrorMessage errorFlag={errorFlag} errorMessage={errorMessage} clearError={this.clearError} />
               </SLanding>
             )}
