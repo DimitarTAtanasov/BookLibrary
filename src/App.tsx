@@ -16,7 +16,7 @@ import {
   BOOK_LIBRARY_ADDRESS
 } from './constants';
 import BOOK_LIBRARY from './constants/abi/BookLibrary.json';
-import LIB_TOKEN from './constants/abi/LibToken.json';
+import LIB_TOKEN from './constants/abi/LIB.json';
 import WRAPPER_CONTRACT from './constants/abi/WrapperContract.json';
 import { getContract } from './helpers/ethers';
 import { logMsg } from './helpers/dev';
@@ -241,6 +241,12 @@ class App extends React.Component<any, any> {
       showNotification(getEventBlock.hash);
     })
 
+    this.state.tokenContract.on("LogPermitted", (addressRecover: any, addressOwner: any, addressSpender: any) => {
+      logMsg(addressRecover)
+      logMsg(addressOwner)
+      logMsg(addressSpender)
+    })
+
     // the following events are for debuging purpose
     this.state.bookLibraryContract.on("UnwrapInBookContract", (amount: any) => {logMsg(ethers.utils.formatEther(amount))});
     this.state.wrapperContract.on("UnwrapInWrapperContract", (amount: any) => {logMsg(ethers.utils.formatEther(amount))});
@@ -423,32 +429,22 @@ class App extends React.Component<any, any> {
   }
 
   public borrowBook = async (bookId: string) => {
-    const { tokenContract, rentPrice, iface, signer } = this.state;
+    const { rentPrice, bookLibraryContract } = this.state;
 
     this.setState({ fetchingBorrowBook: true });
 
     try {
 
-      const approveTx = await tokenContract.approve(BOOK_LIBRARY_ADDRESS, rentPrice);
-      await approveTx.wait();
+      const signature = await this.onAttemptToApprove();
+      
+      const transaction = await bookLibraryContract.borrowBookById(bookId, rentPrice, signature.deadline, signature.v, signature.r, signature.s);
 
-      // manually send transaction 
-      const encodedData = iface.encodeFunctionData("borrowBookById", [bookId]);
+      this.setState({ transactionHash: transaction.hash });
 
-      const transaction = {
-        to: BOOK_LIBRARY_ADDRESS,
-        data: encodedData
-      };
-
-      await signer.sendTransaction(transaction);
-      // const transaction = await bookLibraryContract.borrowBookById(bookId);
-
-      // this.setState({ transactionHash: transaction.hash });
-
-      // const transactionReceipt = await transaction.wait();
-      // if (transactionReceipt.status !== 1) {
-      //   // React to failure
-      // }
+      const transactionReceipt = await transaction.wait();
+      if (transactionReceipt.status !== 1) {
+        // React to failure
+      }
     }
     catch (e) {
       logMsg(e)
@@ -613,11 +609,12 @@ class App extends React.Component<any, any> {
   }
 
   public borrowSignedBook = async () => {
-    const { bookLibraryContract } = this.state;
+    const { bookLibraryContract, availableBooks } = this.state;
     // TODO implement input fields where these values could be fulfilled
     const signedMessage = '0xdf12d86b2bb09c2fa316f5dae7e98dc9c67b945337cf8d49065127081ca28b223e338b0936860e5ec5c1cfbc1caed5f9814687e1d5c85865a5169729541428bc1c'
     const hashedMessage = '0xf25626ca4e6854665dd796172b32bc4cf05721a036483fdb896d0fd11189d99b'
-    const bookId = '0x62cf78552a7f5f4b13c34a5b623c8343e7818e3a9463b1015f1071a5a94b8afb'
+    // Just taking the first available book
+    const bookId = availableBooks[0].bookId;
     const receiver = "0xD9995BAE12FEe327256FFec1e3184d492bD94C31";
 
     const sig = ethers.utils.splitSignature(signedMessage);
@@ -671,6 +668,64 @@ class App extends React.Component<any, any> {
       }
     }
   }
+
+  public onAttemptToApprove = async () => {
+		const { tokenContract, address, library, rentPrice } = this.state;
+		
+		const nonce = (await tokenContract.nonces(address)); // Our Token Contract Nonces
+    const deadline = + new Date() + 60 * 60; // Permit with deadline which the permit is valid
+    const wrapValue = rentPrice; // Value to approve for the spender to use
+		
+		const EIP712Domain = [ // array of objects -> properties from the contract and the types of them ircwithPermit
+        { name: 'name', type: 'string' },
+        { name: 'version', type: 'string' },
+        { name: 'verifyingContract', type: 'address' }
+    ];
+
+    const domain = {
+        name: await tokenContract.name(),
+        version: '1',
+        verifyingContract: tokenContract.address
+    };
+
+    const Permit = [ // array of objects -> properties from erc20withpermit
+        { name: 'owner', type: 'address' },
+        { name: 'spender', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'nonce', type: 'uint256' },
+        { name: 'deadline', type: 'uint256' }
+    ];
+
+    const message = {
+        owner: address,
+        spender: BOOK_LIBRARY_ADDRESS,
+        value: wrapValue.toString(),
+        nonce: nonce.toHexString(),
+        deadline
+    };
+
+    const data = JSON.stringify({
+        types: {
+            EIP712Domain,
+            Permit
+        },
+        domain,
+        primaryType: 'Permit',
+        message
+    })
+
+    const signatureLike = await library.send('eth_signTypedData_v4', [address, data]);
+    const signature = await ethers.utils.splitSignature(signatureLike)
+
+    const preparedSignature = {
+        v: signature.v,
+        r: signature.r,
+        s: signature.s,
+        deadline
+    }
+
+    return preparedSignature
+}
 
   public render = () => {
     const {
