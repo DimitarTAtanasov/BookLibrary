@@ -84,7 +84,7 @@ interface IAppState {
   fetchingBorrowBook: boolean;
   fetchingBorrowedBooksList: boolean;
   fetchingReturnBook: boolean;
-  fetchingunWrapTokens: boolean;
+  fetchingChangingBalances: boolean;
   userBalance: any | null;
   libraryContractBalanceLIB: any | null;
   wrapperContractBalanceETH: any | null;
@@ -120,7 +120,7 @@ const INITIAL_STATE: IAppState = {
   fetchingBorrowBook: false,
   fetchingBorrowedBooksList: false,
   fetchingReturnBook: false,
-  fetchingunWrapTokens: false,
+  fetchingChangingBalances: false,
   userBalance: null,
   libraryContractBalanceLIB: null,
   wrapperContractBalanceETH: null,
@@ -520,9 +520,31 @@ class App extends React.Component<any, any> {
     const { wrapperContract } = this.state;
 
     const wrapValue = ethers.utils.parseEther("0.1");
+    this.setState({ fetchingChangingBalances: true })
 
-    const wrapTx = await wrapperContract.wrap({ value: wrapValue })
-    await wrapTx.wait();
+    try {
+      const transaction = await wrapperContract.wrap({ value: wrapValue })
+      await transaction.wait();
+
+      const transactionReceipt = await transaction.wait();
+      if (transactionReceipt.status !== 1) {
+        // React to failure
+      }
+    }
+
+    catch (e) {
+      logMsg(e)
+      if (e.error) {
+        this.setErrorMessage(e.error.message)
+      }
+      else if (e.data) {
+        this.setErrorMessage(e.data.message)
+      }
+    }
+    finally {
+      this.setState({ fetchingChangingBalances: false })
+
+    }
 
     await this.getUserBalance()
     await this.getContractsBalances()
@@ -531,14 +553,13 @@ class App extends React.Component<any, any> {
   public unWrapTokenIntoContract = async () => {
     const { bookLibraryContract } = this.state;
 
-    this.setState({ fetchingunWrapTokens: true });
+    this.setState({ fetchingChangingBalances: true });
     try {
 
       const wrapValue = ethers.utils.parseEther("0.01")
 
       const transaction = await bookLibraryContract.exchangeTokens(wrapValue);
 
-      this.setState({ transactionHash: transaction.hash });
 
       const transactionReceipt = await transaction.wait();
       if (transactionReceipt.status !== 1) {
@@ -556,7 +577,7 @@ class App extends React.Component<any, any> {
       }
     }
     finally {
-      this.setState({ fetchingunWrapTokens: false })
+      this.setState({ fetchingChangingBalances: false })
 
     }
 
@@ -564,8 +585,6 @@ class App extends React.Component<any, any> {
     await this.getContractsBalances();
 
   }
-
-
 
   public getRentPrice = async () => {
     const { bookLibraryContract } = this.state;
@@ -578,9 +597,7 @@ class App extends React.Component<any, any> {
   public withDrawLibrarayETH = async () => {
     const { bookLibraryContract, library } = this.state;
 
-    
-    
-    this.setState({ fetchingunWrapTokens: true });
+    this.setState({ fetchingChangingBalances: true });
     try {
       const libraryContractBalanceETHRaw = await library.getBalance(BOOK_LIBRARY_ADDRESS)
       const transaction = await bookLibraryContract.withdraw(libraryContractBalanceETHRaw);
@@ -615,7 +632,6 @@ class App extends React.Component<any, any> {
 
     const signedMessage = await signer.signMessage(arrayfiedHash);
 
-    // this.setState({hashedMessage, signedMessage})
     logMsg(hashedMessage)
     logMsg(signedMessage)
   }
@@ -633,7 +649,6 @@ class App extends React.Component<any, any> {
     const approveTx = await tokenContract.approve(BOOK_LIBRARY_ADDRESS, rentPrice);
     await approveTx.wait();
 
-    // this.setState({hashedMessage, signedMessage})
     logMsg(hashedMessage)
     logMsg(signedMessage)
 
@@ -822,7 +837,7 @@ class App extends React.Component<any, any> {
                       showQuantity={false}
                     />
                     <div>
-                      {this.state.fetchingunWrapTokens ? (
+                      {this.state.fetchingChangingBalances ? (
                         <Column center>
                           <SContainer>
                             <Loader />
@@ -830,25 +845,25 @@ class App extends React.Component<any, any> {
                         </Column>
                       ) : (
                         <div>
-                          <span>{`User current LIBToken balance is: ${this.state.userBalance}`}</span>
-                          <button onClick={this.buyLibTokens}>Buy LIBToken</button>
+                          <div>
+                            <span>{`User current LIBToken balance is: ${this.state.userBalance}`}</span>
+                            <button onClick={this.buyLibTokens}>Buy LIBToken</button>
+                          </div>
+                          <div>
+                            <span>{`Book library Contract LIBToken balance is: ${this.state.libraryContractBalanceLIB}`}</span>
+                            <button onClick={this.unWrapTokenIntoContract}>unwrap Library contract lib tokens</button>
+                          </div>
+                          <div>
+                            <span>{`Book library Contract ETH balance is: ${this.state.libraryContractBalanceETH}`}</span>
+                            <button onClick={this.withDrawLibrarayETH}>withdraw library contract ETH</button>
+                          </div>
+                          <div>
+                            <span>{`Wrapper Contract ETH balance is: ${this.state.wrapperContractBalanceETH}`}</span>
+                          </div>
                         </div>
-
                       )}
 
                     </div>
-                    <div>
-                      <span>{`Book library Contract LIBToken balance is: ${this.state.libraryContractBalanceLIB}`}</span>
-                      <button onClick={this.unWrapTokenIntoContract}>unwrap Library contract lib tokens</button>
-                    </div>
-                    <div>
-                      <span>{`Book library Contract ETH balance is: ${this.state.libraryContractBalanceETH}`}</span>
-                      <button onClick={this.withDrawLibrarayETH}>withdraw library contract ETH</button>
-                    </div>
-                    <div>
-                      <span>{`Wrapper Contract ETH balance is: ${this.state.wrapperContractBalanceETH}`}</span>
-                    </div>
-
                     <div>
                       <button onClick={this.signWrapMessage}>Sign a message</button>
                     </div>
