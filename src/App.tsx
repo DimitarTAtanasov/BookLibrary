@@ -94,6 +94,8 @@ interface IAppState {
   signer: any | null;
   hashedMessage: any | null;
   signedMessage: any | null;
+  contractOwner: string;
+  userIsContractOwner: boolean;
 }
 
 const INITIAL_STATE: IAppState = {
@@ -129,7 +131,10 @@ const INITIAL_STATE: IAppState = {
   iface: null,
   signer: null,
   hashedMessage: null,
-  signedMessage: null
+  signedMessage: null,
+  contractOwner: '',
+  userIsContractOwner: false
+
 };
 
 class App extends React.Component<any, any> {
@@ -175,11 +180,13 @@ class App extends React.Component<any, any> {
     let tokenAddress;
     let wrapperAddress;
     let iface;
+    let contractOwner;
 
     if (isbookingLibraryAddrValid) {
       iface = new ethers.utils.Interface(BOOK_LIBRARY.abi);
       bookLibraryContract = getContract(BOOK_LIBRARY_ADDRESS, BOOK_LIBRARY.abi, library, address);
       tokenAddress = await bookLibraryContract.LIBToken();
+      contractOwner = await bookLibraryContract.owner();
 
       if (ethers.utils.isAddress(tokenAddress)) {
         tokenContract = getContract(tokenAddress, LIB_TOKEN.abi, library, address);
@@ -195,7 +202,6 @@ class App extends React.Component<any, any> {
     }
 
 
-
     await this.setState({
       library,
       chainId: network.chainId,
@@ -207,7 +213,9 @@ class App extends React.Component<any, any> {
       wrapperAddress,
       wrapperContract,
       iface,
-      signer
+      signer,
+      contractOwner,
+      userIsContractOwner: ethers.utils.getAddress(address) === ethers.utils.getAddress(contractOwner)
     });
 
     await this.getAvailableBooks();
@@ -812,12 +820,15 @@ class App extends React.Component<any, any> {
                 {
                   this.state.connected &&
                   <div>
+                    {
+                      this.state.userIsContractOwner &&
+                      <AddBookForm
+                        addBook={this.addBook}
+                        transactionHash={transactionHash}
+                        fetchingAddBook={fetchingAddBook}
+                      />
+                    }
 
-                    <AddBookForm
-                      addBook={this.addBook}
-                      transactionHash={transactionHash}
-                      fetchingAddBook={fetchingAddBook}
-                    />
                     <BooksList
                       itemsList={availableBooks || []}
                       onClick={this.borrowBook}
@@ -851,11 +862,11 @@ class App extends React.Component<any, any> {
                           </div>
                           <div>
                             <span>{`Book library Contract LIBToken balance is: ${this.state.libraryContractBalanceLIB}`}</span>
-                            <button onClick={this.unWrapTokenIntoContract}>unwrap Library contract lib tokens</button>
+                            {this.state.userIsContractOwner && <button onClick={this.unWrapTokenIntoContract}>unwrap Library contract lib tokens</button>}
                           </div>
                           <div>
                             <span>{`Book library Contract ETH balance is: ${this.state.libraryContractBalanceETH}`}</span>
-                            <button onClick={this.withDrawLibrarayETH}>withdraw library contract ETH</button>
+                            {this.state.userIsContractOwner && <button onClick={this.withDrawLibrarayETH}>withdraw library contract ETH</button>}
                           </div>
                           <div>
                             <span>{`Wrapper Contract ETH balance is: ${this.state.wrapperContractBalanceETH}`}</span>
