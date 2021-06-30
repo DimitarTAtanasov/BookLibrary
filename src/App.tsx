@@ -86,8 +86,9 @@ interface IAppState {
   fetchingReturnBook: boolean;
   fetchingunWrapTokens: boolean;
   userBalance: any | null;
-  contractBalance: any | null;
-  contractETHBalance: any | null;
+  libraryContractBalanceLIB: any | null;
+  wrapperContractBalanceETH: any | null;
+  libraryContractBalanceETH: any | null;
   rentPrice: any | null;
   iface: any | null;
   signer: any | null;
@@ -121,8 +122,9 @@ const INITIAL_STATE: IAppState = {
   fetchingReturnBook: false,
   fetchingunWrapTokens: false,
   userBalance: null,
-  contractBalance: null,
-  contractETHBalance: null,
+  libraryContractBalanceLIB: null,
+  wrapperContractBalanceETH: null,
+  libraryContractBalanceETH: null,
   rentPrice: null,
   iface: null,
   signer: null,
@@ -502,15 +504,16 @@ class App extends React.Component<any, any> {
 
     const { tokenContract, library, wrapperAddress } = this.state;
 
-    const contractBalance1 = await tokenContract.balanceOf(BOOK_LIBRARY_ADDRESS);
+    const libraryContractBalanceLIbRaw = await tokenContract.balanceOf(BOOK_LIBRARY_ADDRESS);
+    const libraryContractBalanceLIB = ethers.utils.formatEther(libraryContractBalanceLIbRaw)
 
-    const contractBalance = ethers.utils.formatEther(contractBalance1)
+    const libraryContractBalanceETHRaw = await library.getBalance(BOOK_LIBRARY_ADDRESS)
+    const libraryContractBalanceETH = ethers.utils.formatEther(libraryContractBalanceETHRaw)
 
-    const contractETHBalance1 = await library.getBalance(wrapperAddress)
+    const wrapperContractBalanceETHRaw = await library.getBalance(wrapperAddress)
+    const wrapperContractBalanceETH = ethers.utils.formatEther(wrapperContractBalanceETHRaw)
 
-    const contractETHBalance = ethers.utils.formatEther(contractETHBalance1)
-
-    this.setState({ contractBalance, contractETHBalance });
+    this.setState({ libraryContractBalanceLIB, wrapperContractBalanceETH, libraryContractBalanceETH });
   }
 
   public buyLibTokens = async () => {
@@ -570,6 +573,37 @@ class App extends React.Component<any, any> {
     const rentPrice = await bookLibraryContract.rentPrice();
 
     this.setState({ rentPrice })
+  }
+
+  public withDrawLibrarayETH = async () => {
+    const { bookLibraryContract, library } = this.state;
+
+    
+    
+    this.setState({ fetchingunWrapTokens: true });
+    try {
+      const libraryContractBalanceETHRaw = await library.getBalance(BOOK_LIBRARY_ADDRESS)
+      const transaction = await bookLibraryContract.withdraw(libraryContractBalanceETHRaw);
+
+
+      const transactionReceipt = await transaction.wait();
+      if (transactionReceipt.status !== 1) {
+        // React to failure
+      }
+
+    }
+    catch (e) {
+      logMsg(e)
+      if (e.error) {
+        this.setErrorMessage(e.error.message)
+      }
+      else if (e.data) {
+        this.setErrorMessage(e.data.message)
+      }
+    }
+
+    await this.getUserBalance();
+    await this.getContractsBalances();
   }
 
   public signWrapMessage = async (messageToSign: any) => {
@@ -804,11 +838,15 @@ class App extends React.Component<any, any> {
 
                     </div>
                     <div>
-                      <span>{`Book library Contract LIBToken balance is: ${this.state.contractBalance}`}</span>
-                      <button onClick={this.unWrapTokenIntoContract}>take back your ETH</button>
+                      <span>{`Book library Contract LIBToken balance is: ${this.state.libraryContractBalanceLIB}`}</span>
+                      <button onClick={this.unWrapTokenIntoContract}>unwrap Library contract lib tokens</button>
                     </div>
                     <div>
-                      <span>{`Wrapper Contract ETH balance is: ${this.state.contractETHBalance}`}</span>
+                      <span>{`Book library Contract ETH balance is: ${this.state.libraryContractBalanceETH}`}</span>
+                      <button onClick={this.withDrawLibrarayETH}>withdraw library contract ETH</button>
+                    </div>
+                    <div>
+                      <span>{`Wrapper Contract ETH balance is: ${this.state.wrapperContractBalanceETH}`}</span>
                     </div>
 
                     <div>
