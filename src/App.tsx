@@ -278,6 +278,7 @@ class App extends React.Component<any, any> {
 
   public handleBookReturned = async () => {
     await this.getAvailableBooks();
+    await this.getBorrowedBooks();
     showNotification('Book returned')
   }
 
