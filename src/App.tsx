@@ -408,7 +408,7 @@ class App extends React.Component<any, any> {
     for (let bookIndex = 0; bookIndex < bookKeysArr.length; bookIndex++) {
       const currentBookKey = bookKeysArr[bookIndex];
       const currentBook = await bookLibraryContract.books(currentBookKey);
-      availableBooks.push(currentBook)
+      availableBooks.push({...currentBook, bookId: currentBookKey})
     }
 
     this.setState({ fetchingBooksList: false, availableBooks });
@@ -427,7 +427,7 @@ class App extends React.Component<any, any> {
       const userBorrowedBook = await bookLibraryContract.userBorrowedBooks(address, currentBookKey);
       if (userBorrowedBook === 1) {
         const currentBook = await bookLibraryContract.books(currentBookKey);
-        borrowedBooks.push(currentBook);
+        borrowedBooks.push({...currentBook, bookId: currentBookKey});
       }
 
     }
