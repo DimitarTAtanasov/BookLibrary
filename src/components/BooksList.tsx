@@ -15,7 +15,7 @@ const SContainer = styled.div`
 `;
 
 interface ITBooksListProps {
-  itemsList: object[];
+  itemsList: object;
   onClick: any,
   fetchingList: boolean,
   fetchingOnClickAction: boolean,
@@ -49,8 +49,8 @@ function BooksList(prop: ITBooksListProps) {
           ) : (
             <ul>
               {
-                itemsList.length
-                  ? itemsList.map((item: any) => <li key={item.bookId} onClick={() => { prop.onClick(item.bookId) }}><span>{item.bookName}</span> {showQuantity && <span>{`Quantity: ${item.numberOfCopies}`}</span>}</li>)
+                Object.keys(itemsList).length
+                  ? Object.keys(itemsList).map((key: any) => <li key={key} onClick={() => { prop.onClick(key) }}><span>{itemsList[key].bookName}</span> {showQuantity && <span>{`Quantity: ${itemsList[key].numberOfCopies}`}</span>}</li>)
                   : <li>No items in this list</li>
               }
             </ul>

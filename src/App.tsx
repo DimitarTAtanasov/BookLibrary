@@ -403,12 +403,16 @@ class App extends React.Component<any, any> {
     this.setState({ fetchingBooksList: true });
 
     const bookKeysArr = await this.getBookIds();
-    const availableBooks: object[] = [];
+    let availableBooks = {};
 
     for (let bookIndex = 0; bookIndex < bookKeysArr.length; bookIndex++) {
       const currentBookKey = bookKeysArr[bookIndex];
       const currentBook = await bookLibraryContract.books(currentBookKey);
-      availableBooks.push({...currentBook, bookId: currentBookKey})
+
+      availableBooks = {
+        ...availableBooks,
+        [currentBookKey]: currentBook
+      }
     }
 
     this.setState({ fetchingBooksList: false, availableBooks });
@@ -420,14 +424,17 @@ class App extends React.Component<any, any> {
     this.setState({ fetchingBorrowedBooksList: true });
 
     const bookKeysArr = await this.getBookIds();
-    const borrowedBooks: object[] = [];
-
+    let borrowedBooks = {};
     for (let bookIndex = 0; bookIndex < bookKeysArr.length; bookIndex++) {
       const currentBookKey = bookKeysArr[bookIndex];
       const userBorrowedBook = await bookLibraryContract.userBorrowedBooks(address, currentBookKey);
       if (userBorrowedBook === 1) {
         const currentBook = await bookLibraryContract.books(currentBookKey);
-        borrowedBooks.push({...currentBook, bookId: currentBookKey});
+
+        borrowedBooks = {
+          ...borrowedBooks,
+          [currentBookKey]: currentBook
+        }
       }
 
     }
@@ -663,12 +670,13 @@ class App extends React.Component<any, any> {
   }
 
   public borrowSignedBook = async () => {
-    const { bookLibraryContract, availableBooks } = this.state;
+    const { bookLibraryContract } = this.state;
     // TODO implement input fields where these values could be fulfilled
     const signedMessage = '0xdf12d86b2bb09c2fa316f5dae7e98dc9c67b945337cf8d49065127081ca28b223e338b0936860e5ec5c1cfbc1caed5f9814687e1d5c85865a5169729541428bc1c'
     const hashedMessage = '0xf25626ca4e6854665dd796172b32bc4cf05721a036483fdb896d0fd11189d99b'
     // Just taking the first available book
-    const bookId = availableBooks[0].bookId;
+    const bookKeysArr = await this.getBookIds();
+    const bookId = bookKeysArr[0];
     const receiver = "0xD9995BAE12FEe327256FFec1e3184d492bD94C31";
 
     const sig = ethers.utils.splitSignature(signedMessage);
@@ -830,7 +838,7 @@ class App extends React.Component<any, any> {
                     }
 
                     <BooksList
-                      itemsList={availableBooks || []}
+                      itemsList={availableBooks || {}}
                       onClick={this.borrowBook}
                       fetchingList={fetchingBooksList}
                       fetchingOnClickAction={fetchingBorrowBook}
@@ -839,7 +847,7 @@ class App extends React.Component<any, any> {
                       showQuantity={true}
                     />
                     <BooksList
-                      itemsList={borrowedBooks || []}
+                      itemsList={borrowedBooks || {}}
                       onClick={this.returnBook}
                       fetchingList={fetchingBorrowedBooksList}
                       fetchingOnClickAction={fetchingReturnBook}
