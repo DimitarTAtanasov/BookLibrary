@@ -634,6 +634,10 @@ class App extends React.Component<any, any> {
         this.setErrorMessage(e.data.message)
       }
     }
+    finally {
+      this.setState({ fetchingChangingBalances: false })
+
+    }
 
     await this.getUserBalance();
     await this.getContractsBalances();
